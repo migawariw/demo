@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Drive Upload Demo</title>
+</head>
+<body>
+  <h2>Google Drive Upload Demo</h2>
+
+  <!-- OAuthサインイン -->
+  <button id="auth-btn">Sign In with Google</button>
+  <br><br>
+
+  <!-- 画像ファイル選択 -->
+  <input type="file" id="file-input" accept="image/*">
+
+  <pre id="output"></pre>
+
+  <script src="https://apis.google.com/js/api.js"></script>
+  <script>
+    const CLIENT_ID = 'YOUR_OAUTH_CLIENT_ID'; // ← Google Cloudで作ったID
+    const SCOPES = 'https://www.googleapis.com/auth/drive.file';
+
+    // Google API 初期化
+    function initClient() {
+      gapi.load('client:auth2', () => {
+        gapi.client.init({
+          clientId: CLIENT_ID,
+          scope: SCOPES
+        });
+      });
+    }
+
+    document.getElementById('auth-btn').onclick = () => {
+      gapi.auth2.getAuthInstance().signIn();
+    };
+
+    // ファイルアップロード
+    document.getElementById('file-input').addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      const accessToken = gapi.auth.getToken().access_token;
+      const metadata = { name: file.name, mimeType: file.type };
+      const form = new FormData();
+      form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+      form.append('file', file);
+
+      const res = await fetch(
+        'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id',
+        {
+          method: 'POST',
+          headers: { 'Authorization': 'Bearer ' + accessToken },
+          body: form
+        }
+      );
+      const data = await res.json();
+      const fileId = data.id;
+
+      // 公開共有に設定（誰でも見れる設定）
+      await fetch(
+        `https://www.googleapis.com/drive/v3/files/${fileId}/permissions`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': 'Bearer ' + accessToken,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ role: 'reader', type: 'anyone' })
+        }
+      );
+
+      // Markdown用リンク（表示用URL）
+      const viewUrl = `https://drive.google.com/uc?export=view&id=${fileId}`;
+      document.getElementById('output').textContent =
+        `![${file.name}](${viewUrl})`;
+    });
+
+    initClient();
+  </script>
+
+</body>
+</html>
